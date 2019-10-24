@@ -4,3 +4,160 @@ author: "Alison Elgass"
 date: "10/24/2019"
 output: github_document
 ---
+```{r}
+library(tidyverse)
+library(rvest)
+set.seed(1)
+```
+
+How to calculate a z-score (by hand)
+```{r}
+aaa = rnorm(25, mean = 5, sd = 3)
+(x - mean(x)) / sd(x)
+```
+
+# Our first function: z-scores
+Let's write a function for z-scores
+```{r}
+z_scores = function(x) {
+  
+  z = (x - mean(x)) / sd(x)
+  z   #this is the output
+  
+}
+```
+ 
+Try out the funciton
+```{r}
+z_scores(aaa)
+z_scores(3) #outputs NA
+z_scores("my name is Alison") #error
+```
+
+Now add conditions in case of wrong input
+```{r}
+z_scores_new = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Z scores cannot be computed for length 1 vectors")
+  }
+  
+  z = mean(x) / sd(x)
+  
+  z  #output
+}
+```
+
+```{r}
+```{r}
+z_scores_new(aaa)
+z_scores_new(3)
+z_scores_new("my name is Alison")
+```
+
+## Two outputs, mean & sd
+```{r}
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Cannot be computed for length 1 vectors")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+  
+  #output as either a list or a tibble
+  list(mean = mean_x, 
+       sd = sd_x)
+  
+  tibble(
+    mean = mean_x, 
+    sd = sd_x)
+}
+```
+
+```{r}
+mean_and_sd(aaa)
+```
+
+
+# Multiple Inputs, linear regression
+
+Linear regression by hand
+```{r}
+sim_data = tibble(
+  x = rnorm(30, mean = 1, sd = 1),
+  y = 2 + 3 * x + rnorm(30, 0, 1)
+)
+
+ls_fit = lm(y ~ x, data = sim_data)
+  
+beta0_hat = coef(ls_fit)[1]
+beta1_hat = coef(ls_fit)[2]
+```
+
+Now a function for LR!
+```{r}
+sim_regression = function(n, beta0, beta1) {
+  
+  sim_data = tibble(
+    x = rnorm(n, mean = 1, sd = 1),
+    y = beta0 + beta1 * x + rnorm(n, 0, 1)
+  )
+  
+  ls_fit = lm(y ~ x, data = sim_data)
+  
+  tibble(
+    beta0_hat = coef(ls_fit)[1],
+    beta1_hat = coef(ls_fit)[2]
+  )
+}
+```
+
+```{r}
+sim_regression(30, 2, 3)
+sim_regression(n = 30, beta0 = 2, beta1 = 3) #same
+```
+
+
+# Function to scrape web for reviews
+```{r}
+read_page_reviews = function(url) {
+  
+  h = read_html(url)
+  
+  review_titles = h %>%
+    html_nodes("#cm_cr-review_list .review-title") %>%
+    html_text()
+  
+  review_stars = h %>%
+    html_nodes("#cm_cr-review_list .review-rating") %>%
+    html_text() %>%
+    str_extract("\\d") %>%
+    as.numeric()
+  
+  review_text = h %>%
+    html_nodes(".review-data:nth-child(4)") %>%
+    html_text()
+  
+  #outputs these 3 variables as a tibble
+  tibble(
+    title = review_titles,
+    stars = review_stars,
+    text = review_text
+  )
+}
+```
+
+```{r}
+url_base = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber="
+read_page_reviews(url_base)
+```
+
+
+
+
