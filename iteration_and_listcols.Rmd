@@ -1,0 +1,231 @@
+---
+title: "Iteration & Listcols"
+author: "Alison Elgass"
+date: "10/29/2019"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+
+set.seed(1)
+```
+
+# Lists and things
+Lists allow you to combine variables of different types  
+(vectors limited to a single data class)
+```{r}
+vec_numeric = 5:8
+vec_char = c("My", "name", "is", "Jeff")
+vec_logical = c(TRUE, TRUE, TRUE, FALSE)
+```
+
+```{r}
+l = list(vec_numeric = 5:8,
+         mat         = matrix(1:8, 2, 4),
+         vec_logical = c(TRUE, FALSE),
+         summary     = summary(rnorm(1000)))
+
+#index like normal
+l$mat
+l$vec_numeric
+l[[1]]
+l[[1]][1:3]
+```
+
+```{r}
+df = list(
+  a = rnorm(20, 3, 1),
+  b = rnorm(20, 0, 5),
+  c = rnorm(20, 10, .2),
+  d = rnorm(20, -3, 1)
+)
+```
+
+...Remember our friendly function we wrote
+```{r}
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Cannot be computed for length 1 vectors")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+
+  tibble(
+    mean = mean_x, 
+    sd = sd_x
+  )
+}
+```
+
+Try it on each element of list
+```{r}
+mean_and_sd(df[[1]])
+mean_and_sd(df[[2]])
+mean_and_sd(df[[3]])
+mean_and_sd(df[[4]])
+```
+
+## For loops
+
+Let's do the mean/sd function 4 times  
+So basically we're doing the above code on the variable df by pre-defining an output variable then using a for loop
+```{r}
+#create an empty list of 4........................
+output = vector("list", length = 4)
+#.................................................
+
+#now use a loop
+for (i in 1:4) {
+  output[[i]] = mean_and_sd(df[[i]]) 
+}
+
+output #display result
+```
+
+## Using Map
+map (from purr package within tidyverse) allows us to do exactly what the above for loop does in a clearer way  
+
+"The first argument to map is the vector/list/data frame we want to iterate over, and the second argument is the function we want to apply to each element"
+```{r}
+output = map(df, mean_and_sd)
+output  #display it
+
+output_median = map(df, median) #a different (built-in) fxn
+```
+
+### Map Variants
+these alter the structure of output variable
+```{r}
+output = map_dbl(df, median, .id = "input") #vector
+output = map_dfr(df, mean_and_sd, .id = "input")
+output = map2(.x = input_1, .y = input_2, ~func(arg_1 = .x, arg_2 = .y))
+
+```
+
+# Napoleon Dynamite Example
+Start with the function we wrote before
+```{r}
+read_page_reviews = function(url) {
+  
+  h = read_html(url)
+  
+  title = h %>%
+    html_nodes("#cm_cr-review_list .review-title") %>%
+    html_text()
+  
+  stars = h %>%
+    html_nodes("#cm_cr-review_list .review-rating") %>%
+    html_text() %>%
+    str_extract("\\d") %>%
+    as.numeric()
+  
+  text = h %>%
+    html_nodes(".review-data:nth-child(5)") %>%
+    html_text()
+  
+  data_frame(title, stars, text)
+}
+```
+
+So let's try to do this with this data
+```{r}
+url_base = "https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber="
+vec_urls = str_c(url_base, 1:5)
+```
+
+Using a for loop or a map statement
+```{r}
+#1. pre-define output 
+output = vector("list", 5)
+
+#2. for loop to fill output
+for (i in 1:5) {
+  output[[i]] = read_page_reviews(vec_urls[[i]])
+}
+
+#3. now bind together into a dataframe
+dynamite_reviews = bind_rows(output)
+
+
+#OR... we can just use a map statement!
+dynamite_reviews = map_df(vec_urls, read_page_reviews)
+```
+
+# Weather Example
+```{r}
+weather = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728", "USC00519397", "USS0023B17S"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2016-01-01",
+    date_max = "2016-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY", 
+                      USC00519397 = "Waikiki_HA",
+                      USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+### Nesting
+Since we have only 3 locations/station id's, let's separate data into 3 rows (each for 1 location) which each has a whole dataset (the rest of the columns)
+```{r}
+weather_nest = 
+  nest(weather, data = date:tmin)
+
+weather_nest #here is the nested dataset
+
+#unnest(weather_nest, cols = data) #can reverse
+```
+
+We treat weather_nest like any other variable
+```{r}
+pull(weather_nest, name) #a character column
+weather_nest %>% pull(name) #same thing
+
+weather_nest %>% pull(data) #a list column, 3 parts
+all_data = pull(weather_nest, data)
+```
+
+Now let's look at just the central park data
+```{r}
+central_park_df = weather_nest$data[[1]]
+```
+
+## Operations on list columns
+"Suppose we want to fit the simple linear regression relating tmax to tmin for each station-specific data frame. First I’ll write a quick function that takes a data frame as the sole argument to fit this model"
+```{r}
+#linear regression function on a df
+weather_lm = function(df) {
+  lm(tmax ~ tmin, data = df)
+}
+
+#test it on one dataframe
+weather_lm(central_park_df)
+```
+
+Now use for loop or map to apply to all pieces of our list
+```{r}
+map(weather_nest$data, weather_lm)
+```
+
+But let's add a column to weather_nest with the linear regression output, using mutate
+```{r}
+weather_nest %>% 
+  mutate(
+    lin_models = map(data, weather_lm)
+    #in map we iterate over "data" column of weather_nest
+    #doing the weather_lm function
+  )
+
+#let's view new data for Central Park (list 1)
+view(weather_nest[[3]][[1]])
+```
+
