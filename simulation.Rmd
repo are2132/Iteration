@@ -1,0 +1,114 @@
+---
+title: "Simulation"
+author: "Alison Elgass"
+date: "10/31/2019"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+
+set.seed(1)
+```
+
+# Linear regression function
+Starting again with linear regression function  
+Should return fitted intercept and slope, close to 2 and 3
+```{r}
+sim_regression = function(n, beta0 = 2, beta1 = 3) {
+  
+  sim_data = tibble(
+    x = rnorm(n, mean = 1, sd = 1),
+    y = beta0 + beta1 * x + rnorm(n, 0, 1) 
+  )
+  
+  ls_fit = lm(y ~ x, data = sim_data)
+  
+  tibble(
+    beta0_hat = coef(ls_fit)[1],
+    beta1_hat = coef(ls_fit)[2]
+  )
+}
+```
+
+```{r}
+sim_regression(30)
+sim_regression(10000)
+```
+
+### re-run regression function 5,000 times using a for loop
+```{r}
+output = vector("list", length = 5000)
+
+
+for (i in 1:5000) {
+  output[[i]] = sim_regression(n = 30)
+}
+output[[1]] #an example from entry 1
+
+bind_rows(output) %>% #combine lists together into 1 tibble
+  ggplot(aes(x = beta0_hat)) + geom_density()
+```
+
+# now re-run instead using purr 'rerun'
+```{r}
+output = 
+  rerun(5000, sim_regression(n = 30)) %>% 
+  bind_rows() #again combine into 1 tibble
+
+output %>% 
+  ggplot(aes(x = beta0_hat, y = beta1_hat)) + geom_point()
+
+output %>% 
+  pivot_longer(
+    names_to = "parameter",
+    values_to = "estimate",
+    beta0_hat:beta1_hat
+  ) %>% 
+  group_by(parameter) %>% 
+  summarize(emp_mean = mean(estimate),
+            emp_var = var(estimate)) %>% 
+  knitr::kable(digits = 3)
+```
+
+## Different sample sizes
+```{r}
+#list of 4 different sample sizes
+n_list = list("n_30"  = 30, 
+              "n_60"  = 60, 
+              "n_120" = 120, 
+              "n_240" = 240)
+
+#create empty list of 4
+results = vector("list", length = 4)
+
+#fill each entry of list with simulation of 100x for relevant n
+for (i in 1:4) {
+  results[[i]] = 
+    rerun(100, sim_regression(n_list[[i]])) %>% 
+    bind_rows
+}
+
+results[[4]] %>% 
+  ggplot(aes(x = beta0_hat, y = beta1_hat)) + geom_point()
+```
+
+cleaner way to do this simulation for 4 different sample sizes  
+using map and rerun (from purr)
+```{r}
+sim_results = 
+  tibble(
+    sample_size = c(30, 60, 120, 240)
+    ) %>% 
+  mutate( #add columns to tibble
+    #for each entry in column sample size,
+    #rerun SLR 10 times, using that sample size
+    output_list = 
+      map(.x = sample_size, ~ rerun(10, sim_regression(n = .x))),
+    output_df = 
+      map(output_list, bind_rows) #for each entry of list, turn into df
+  ) %>% 
+  select(-output_list) %>%  #only the df
+  unnest(output_df)
+```
+

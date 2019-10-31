@@ -225,7 +225,7 @@ weather_nest %>%
     #doing the weather_lm function
   )
 
-#let's view new data for Central Park (list 1)
+#let's view new data for Central Park (column 3, list 1)
 view(weather_nest[[3]][[1]])
 ```
 
